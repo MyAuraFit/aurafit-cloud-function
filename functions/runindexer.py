@@ -1,10 +1,19 @@
-from genkit import Document, MediaPart, Media, TextPart
+from genkit import Document, MediaPart, Media, TextPart, GenkitError
 from genkit.core.typing import DocumentPart
+from tenacity import (
+    retry,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 from indexer import indexer_ai
 from models import IndexData
 
 
+@retry(
+    wait=wait_exponential(multiplier=1, min=1, max=60),
+    retry=retry_if_exception_type((RuntimeError, GenkitError)),
+)
 def run_indexer(
     index_ref: str, documents: list[Document], options: dict[str, IndexData]
 ):

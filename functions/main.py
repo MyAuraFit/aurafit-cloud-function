@@ -144,7 +144,7 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
     }
 
 
-@storage_fn.on_object_finalized(memory=MemoryOption.MB_512)
+@storage_fn.on_object_finalized(timeout_sec=540, memory=MemoryOption.MB_512)
 def generate_embedding(
     event: storage_fn.CloudEvent[storage_fn.StorageObjectData],
 ):
@@ -169,7 +169,9 @@ def generate_embedding(
 
     placeholder_image = generate_thumbnail(image_bytes, (50, 50), blur_radius=3)
 
-    thumbnail = generate_thumbnail(image_bytes, (512, 512), ret_as_bytes=True)
+    thumbnail = generate_thumbnail(
+        image_bytes, (512, 512), ret_as_bytes=True, blur=False
+    )
     thumbnail_path = file_path.parent / pathlib.PurePath(f"thumb-{file_path.stem}.jpeg")
     thumbnail_blob = bucket.blob(str(thumbnail_path))
     thumbnail_blob.upload_from_string(thumbnail, content_type="image/jpeg")
@@ -194,7 +196,7 @@ def generate_embedding(
     user = auth.get_user(file_path.parts[1])
     context = user.display_name
 
-    if file_path.parts[2] == "cloth":
+    if file_path.parts[2] == "clothes":
         result: ImageCategorizationOutput = run_categorize_image_flow(
             ImageCategorizationInput(
                 system=categorization_system_prompt,

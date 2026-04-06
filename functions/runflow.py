@@ -1,3 +1,11 @@
+from genkit import GenkitError
+from google.genai.errors import ClientError
+from tenacity import (
+    retry,
+    wait_exponential,
+    retry_if_exception_type,
+)
+
 from ai import flow_ai
 from flows import generate_instantfit_flow, categorize_image_flow, generate_autofit_flow
 from models import (
@@ -14,6 +22,10 @@ def run_generate_instantfit_flow(
     return flow_ai.run_main(generate_instantfit_flow(input_schema))
 
 
+@retry(
+    wait=wait_exponential(multiplier=1, min=1, max=60),
+    retry=retry_if_exception_type((GenkitError, ClientError)),
+)
 def run_categorize_image_flow(
     input_schema: ImageCategorizationInput,
 ) -> ImageCategorizationOutput:

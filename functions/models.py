@@ -86,7 +86,7 @@ class ImageCategorizationInput(BaseModel):
         description="The prompt image to categorize."
     )
     model: str = Field(
-        default="vertexai/gemini-3-flash-preview",
+        default="vertexai/gemini-3.1-flash-lite-preview",
         description="The model to use for image categorization.",
     )
 

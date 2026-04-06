@@ -1,0 +1,4 @@
+firebase_functions~=0.5.0
+genkit==0.5.1
+genkit-plugin-google-genai==0.5.1
+genkit-plugin-firebase==0.5.1

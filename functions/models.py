@@ -29,7 +29,7 @@ class GenerateImageInputSchema(BaseModel):
         description="The model to use for image generation.",
     )
     image_config: ImageConfig = Field(
-        description="The configuration for the image generation."
+        default=ImageConfig(), description="The configuration for the image generation."
     )
     firestore_client: Annotated[firestore.Client | None, SkipJsonSchema()] = Field(
         default=None, description="The firestore client to use.", exclude=True

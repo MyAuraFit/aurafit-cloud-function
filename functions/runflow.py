@@ -47,7 +47,7 @@ __all__ = [
 
 if __name__ == "__main__":
     from prompts import (
-        instantfit_system_prompt2,
+        generate_image_system_prompt,
     )
     from firebase_admin import initialize_app, firestore
     from models import ImageConfig
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         run_generate_autofit_flow(
             GenerateImageInputSchema(
                 uid="NlGVVbZ1ssMaOROGB9giY0Yu4KB3",
-                system=instantfit_system_prompt2,
+                system=generate_image_system_prompt,
                 prompt="I'm going for an outdoor event and it's kind of cold",
                 image_config=ImageConfig(),
                 firestore_client=firestore.client(),

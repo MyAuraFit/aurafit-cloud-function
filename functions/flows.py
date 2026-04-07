@@ -1,3 +1,5 @@
+from typing import cast
+
 from genkit import Part, Output, MediaPart, Media, TextPart
 
 from ai import flow_ai, indexer_ai
@@ -7,10 +9,9 @@ from models import (
     ImageCategorizationOutput,
     ImageCategorizationInput,
     QueryOutput,
-    ImageConfig,
     UserDataSearchInput,
 )
-from prompts import user_cloth_vector_search_system_prompt
+from prompts import user_cloth_vector_search_system_prompt, generate_image_user_prompt
 from retriever import user_clothes_retriever, user_selfie_retriever
 from utils import (
     decode_base64_image,
@@ -51,7 +52,7 @@ async def categorize_image_flow(
 @flow_ai.flow()
 async def generate_autofit_flow(
     input_schema: GenerateImageInputSchema,
-) -> ImageGenerationResult:
+) -> ImageGenerationResult | None:
     async def generate_query(user_prompt) -> str:
         result = await flow_ai.generate(
             system=user_cloth_vector_search_system_prompt,
@@ -106,7 +107,7 @@ async def generate_autofit_flow(
             "sharp features, and a clean background. Authentic facial expression, "
             "high-quality mobile photography, centered composition, and a shallow depth of field. "
             "A centered selfie with no obstructions, professional-grade skin tones, and vibrant clarity.",
-            options={"limit": 5},
+            options={"limit": 1},
         ),
         user_data_vector_search,
     )
@@ -132,7 +133,8 @@ async def generate_autofit_flow(
         )
         for doc in clothes
     ]
-    prompt.append(Part(root=TextPart(text=input_schema.prompt)))
+    text = cast(str, input_schema.prompt)
+    prompt.append(Part(root=TextPart(text=text)))
     input_schema.prompt = prompt
     return await generate_instantfit_flow(input_schema)
 
@@ -175,7 +177,7 @@ async def generate_instantfit_flow(
 
 if __name__ == "__main__":
     from firebase_admin import firestore, initialize_app
-    from prompts import instantfit_system_prompt2
+    from prompts import generate_image_system_prompt
 
     initialize_app()
     selfie_url = "gs://my-aurafit.firebasestorage.app/users/INOv1CMZ5aXRh2Q5OF6ZRB7XMAB2/selfie/1000411251.jpg"
@@ -229,9 +231,12 @@ if __name__ == "__main__":
             generate_autofit_flow(
                 GenerateImageInputSchema(
                     uid="NlGVVbZ1ssMaOROGB9giY0Yu4KB3",
-                    system=instantfit_system_prompt2,
-                    prompt="I'm going for an outdoor event and it's kind of cold",
-                    image_config=ImageConfig(),
+                    system=generate_image_system_prompt,
+                    prompt=generate_image_user_prompt.format(
+                        occasion="office meeting",
+                        mood="bold",
+                        time_of_day="night",
+                    ),
                     firestore_client=firestore.client(),
                 )
             )

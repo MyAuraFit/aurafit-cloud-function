@@ -3,6 +3,7 @@ from datetime import timezone, datetime
 from io import BytesIO
 
 from PIL import Image, ImageFilter
+from firebase_functions import https_fn
 
 
 def decode_base64_image(base64_image: str) -> bytes:
@@ -62,3 +63,18 @@ def prepare_document(content, title=None):
 # Generate embedding for classification
 def prepare_classification_input(content):
     return f"task: classification | query: {content}"
+
+
+def require_text_field(value: object, name: str, max_len: int = 2000) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise https_fn.HttpsError(
+            code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
+            message=f"{name} is required",
+        )
+    val = value.strip()
+    if len(val) > max_len:
+        raise https_fn.HttpsError(
+            code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
+            message=f"{name} is too long",
+        )
+    return val

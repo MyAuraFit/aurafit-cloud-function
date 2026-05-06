@@ -71,6 +71,14 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
             message="Request data must be an object",
         )
 
+    db = firestore.client()
+    user_data = db.document(f"users/{uid}").get()
+    if user_data.get("coins") < 1:
+        raise https_fn.HttpsError(
+            code=https_fn.FunctionsErrorCode.FAILED_PRECONDITION,
+            message="Insufficient coins to generate image, please top up your account",
+        )
+
     data: dict[str, Any] = req.data
     mood = require_text_field(data.get("mood"), "mood")
     occasion = require_text_field(data.get("occasion"), "occasion")
@@ -83,7 +91,6 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
             message="type must be either instantfit or autofit",
         )
 
-    db = firestore.client()
     storage_bucket = storage.bucket()
     user_prefix = f"gs://{storage_bucket.name}/users/{uid}/"
 
@@ -229,7 +236,8 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
             code=https_fn.FunctionsErrorCode.INTERNAL,
             message="Failed to save generated image",
         )
-
+    db.document(f"users/{uid}").update({"coins": cloud_firestore.Increment(-1)})
+    db.document(f"users/{uid}").update({"coins": cloud_firestore.Maximum(0)})
     return {
         "image": image_http_url,
         "thumbnail": placeholder_image,

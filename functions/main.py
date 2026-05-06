@@ -1,17 +1,20 @@
 # Welcome to Cloud Functions for Firebase for Python!
 # To get started, simply uncomment the below code or create your own.
 # Deploy with `firebase deploy`
+import asyncio
 import logging
 import pathlib
-from typing import Any
+from typing import Any, cast
 
-from firebase_admin import initialize_app, storage, firestore, auth
+import google
+from firebase_admin import initialize_app, storage, firestore, auth, remote_config
 from firebase_admin.auth import UserNotFoundError
-from firebase_functions import https_fn, storage_fn
+from firebase_functions import https_fn, storage_fn, pubsub_fn
 from firebase_functions.options import set_global_options, MemoryOption
 from genkit import Part, TextPart, MediaPart, Media, Document
 from genkit.core.typing import DocumentPart
 from google.cloud import firestore as cloud_firestore
+from googleapiclient.discovery import build
 
 from models import (
     GenerateImageInputSchema,
@@ -39,6 +42,8 @@ from utils import (
     decode_base64_image,
     prepare_document,
     require_text_field,
+    parse_media,
+    process_subscription,
 )
 
 # For cost control, you can set the maximum number of containers that can be
@@ -82,37 +87,11 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
     storage_bucket = storage.bucket()
     user_prefix = f"gs://{storage_bucket.name}/users/{uid}/"
 
-    def _parse_media(field_name: str) -> tuple[str, str]:
-        media_obj = data.get(field_name)
-        if not isinstance(media_obj, dict):
-            raise https_fn.HttpsError(
-                code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
-                message=f"{field_name} must be an object",
-            )
-        gs_url = media_obj.get("gs_url")
-        mimetype = media_obj.get("mimetype")
-        if not isinstance(gs_url, str) or not gs_url.startswith("gs://"):
-            raise https_fn.HttpsError(
-                code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
-                message=f"{field_name}.gs_url must be a valid gs:// URL",
-            )
-        if not gs_url.startswith(user_prefix):
-            raise https_fn.HttpsError(
-                code=https_fn.FunctionsErrorCode.PERMISSION_DENIED,
-                message=f"{field_name} must belong to the authenticated user",
-            )
-        if not isinstance(mimetype, str) or not mimetype.startswith("image/"):
-            raise https_fn.HttpsError(
-                code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
-                message=f"{field_name}.mimetype must be an image MIME type",
-            )
-        return gs_url, mimetype
-
     result: ImageGenerationResult | None
     try:
         if request_type == "instantfit":
-            selfie_url, selfie_mimetype = _parse_media("selfie")
-            cloth_url, cloth_mimetype = _parse_media("cloth")
+            selfie_url, selfie_mimetype = parse_media(data, user_prefix, "selfie")
+            cloth_url, cloth_mimetype = parse_media(data, user_prefix, "cloth")
             result = run_generate_instantfit_flow(
                 GenerateImageInputSchema(
                     system=generate_image_system_prompt,
@@ -192,7 +171,7 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
         )
 
     try:
-        thumbnail = generate_thumbnail(image_data, (300, 300), blur=False)
+        thumbnail = cast(str, generate_thumbnail(image_data, (300, 300), blur=False))
         placeholder_image = generate_thumbnail(image_data, (50, 50), blur_radius=3)
         dominant_color = get_dominant_color(image_data)
     except Exception:
@@ -287,6 +266,11 @@ def generate_embedding(
         return
 
     uid = file_path.parts[1]
+    try:
+        user = auth.get_user(uid)
+    except UserNotFoundError:
+        logger.warning("generate_embedding: failed to load auth user for uid=%s", uid)
+        return
     media_kind = file_path.parts[2]
     if media_kind not in ["clothes", "selfies"]:
         return
@@ -332,14 +316,7 @@ def generate_embedding(
         "source_generation": source_generation,
     }
 
-    context = None
-    try:
-        user = auth.get_user(uid)
-        if user.display_name:
-            context = user.display_name
-    except UserNotFoundError:
-        logger.warning("generate_embedding: failed to load auth user for uid=%s", uid)
-        return
+    context = user.display_name
 
     if media_kind == "clothes":
         result: ImageCategorizationOutput = run_categorize_image_flow(
@@ -387,3 +364,42 @@ def generate_embedding(
             )
         },
     )
+
+
+@pubsub_fn.on_message_published(topic="play-billing")  # type: ignore
+def handle_play_notification(
+    event: pubsub_fn.CloudEvent[pubsub_fn.MessagePublishedData],
+) -> None:
+    # 1. Parse the JSON payload using the helper property
+    try:
+        data = event.data.message.json
+    except ValueError:
+        print("Invalid JSON payload")
+        return
+
+    if not data:
+        return
+
+    # Initialize Google Play API Client
+
+    creds, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/androidpublisher"]
+    )
+    service = build("androidpublisher", "v3", credentials=creds)
+    template = asyncio.run(remote_config.get_server_template())
+    config = template.evaluate()
+
+    # 2. Determine if it's a Subscription or a One-Time Product
+    try:
+        if "subscriptionNotification" in data:
+            process_subscription(service, data, config)
+
+    # elif "oneTimeProductNotification" in data:
+    #     process_one_time_product(
+    #         service, data["oneTimeProductNotification"], package_name
+    #     )
+    #
+    # else:
+    #     print("Notification type not supported or is a test ping.")
+    except UserNotFoundError as e:
+        logger.warning(f"handle_play_notification: {e}")

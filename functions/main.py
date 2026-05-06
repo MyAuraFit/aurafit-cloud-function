@@ -366,7 +366,7 @@ def generate_embedding(
     )
 
 
-@pubsub_fn.on_message_published(topic="play-billing")  # type: ignore
+@pubsub_fn.on_message_published(topic="play-billing", memory=MemoryOption.MB_512)  # type: ignore
 def handle_play_notification(
     event: pubsub_fn.CloudEvent[pubsub_fn.MessagePublishedData],
 ) -> None:

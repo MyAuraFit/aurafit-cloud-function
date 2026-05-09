@@ -44,6 +44,7 @@ from utils import (
     require_text_field,
     parse_media,
     process_subscription,
+    process_one_time_product,
 )
 
 # For cost control, you can set the maximum number of containers that can be
@@ -402,10 +403,8 @@ def handle_play_notification(
         if "subscriptionNotification" in data:
             process_subscription(service, data, config)
 
-    # elif "oneTimeProductNotification" in data:
-    #     process_one_time_product(
-    #         service, data["oneTimeProductNotification"], package_name
-    #     )
+        elif "oneTimeProductNotification" in data:
+            process_one_time_product(service, data, config)
     #
     # else:
     #     print("Notification type not supported or is a test ping.")

@@ -124,25 +124,27 @@ def process_subscription(service, data, config):
 
     # Check if it needs acknowledgement
 
-    if sub.get("acknowledgementState") == "ACKNOWLEDGEMENT_STATE_PENDING":
+    if sub["acknowledgementState"] == "ACKNOWLEDGEMENT_STATE_PENDING":
         service.purchases().subscriptions().acknowledge(
             packageName=package_name,
             subscriptionId=notification["subscriptionId"],
             token=token,
             body={},
         ).execute()
-        for line in sub.get("lineItems"):
+        uid = sub["externalAccountIdentifiers"]["obfuscatedExternalAccountId"]
+        for line in sub["lineItems"]:
             coins = config.get_int(line["offerDetails"]["basePlanId"])
-            uid = sub["externalAccountIdentifiers"]["obfuscatedExternalAccountId"]
             auth.get_user(uid)
             award_coins(uid, coins)
 
 
-def process_one_time_product(service, notification, package_name):
-    token = notification.get("purchaseToken")
-    product_id = notification.get("sku")  # The SKU/Product ID
+def process_one_time_product(service, data, config):
+    notification = data["oneTimeProductNotification"]
+    token = notification["purchaseToken"]
+    product_id = notification["sku"]  # The SKU/Product ID
+    package_name = data["packageName"]
 
-    # Use productsv2 to get details (no productId required for the GET)
+    # # Use productsv2 to get details (no productId required for the GET)
     purchase = (
         service.purchases()
         .productsv2()
@@ -150,30 +152,24 @@ def process_one_time_product(service, notification, package_name):
         .execute()
     )
 
-    # Check if it needs acknowledgement
-    if purchase.get("acknowledgementState") == "ACKNOWLEDGEMENT_STATE_PENDING":
+    # # Check if it needs acknowledgement
+    if purchase["acknowledgementState"] == "ACKNOWLEDGEMENT_STATE_PENDING":
         # LOGIC: If it's a consumable (like coins), we CONSUME.
         # If it's a permanent upgrade, we ACKNOWLEDGE.
 
-        # Example: If the product ID contains 'coins', we consume it
-        if "coins" in product_id:
-            service.purchases().products().consume(
-                packageName=package_name, productId=product_id, token=token
-            ).execute()
-            print(f"Consumable {product_id} consumed.")
+        service.purchases().products().consume(
+            packageName=package_name, productId=product_id, token=token
+        ).execute()
+        print(f"Consumable {product_id} consumed.")
 
-            # Award coins in Firestore
-            user_id = purchase.get("externalAccountIdentifiers", {}).get(
-                "externalAccountId"
-            )
-            if user_id:
-                award_coins(user_id, 100)  # Example amount
-        else:
-            # Permanent purchase
-            service.purchases().products().acknowledge(
-                packageName=package_name, productId=product_id, token=token, body={}
-            ).execute()
-            print(f"Permanent product {product_id} acknowledged.")
+        # Award coins in Firestore
+        uid = purchase["obfuscatedExternalAccountId"]
+        coins = config.get_int(product_id)
+
+        for line in purchase["productLineItem"]:
+            quantity = line["productOfferDetails"]["quantity"]
+            total_coins = coins * quantity
+            award_coins(uid, total_coins)
 
 
 def award_coins(uid, amount):

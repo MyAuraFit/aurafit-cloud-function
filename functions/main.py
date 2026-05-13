@@ -16,6 +16,7 @@ from genkit.core.typing import DocumentPart
 from google.cloud import firestore as cloud_firestore
 from googleapiclient.discovery import build
 
+from admobssv import AdMobSSVVerifier, SecurityError
 from models import (
     GenerateImageInputSchema,
     ImageGenerationResult,
@@ -45,6 +46,7 @@ from utils import (
     parse_media,
     process_subscription,
     process_one_time_product,
+    award_coins,
 )
 
 # For cost control, you can set the maximum number of containers that can be
@@ -54,6 +56,7 @@ from utils import (
 # parameter in the decorator, e.g. @https_fn.on_request(max_instances=5).
 set_global_options(max_instances=10)
 initialize_app()
+ssv_verifier = AdMobSSVVerifier()
 logger = logging.getLogger(__name__)
 
 
@@ -410,3 +413,45 @@ def handle_play_notification(
     #     print("Notification type not supported or is a test ping.")
     except UserNotFoundError as e:
         logger.warning(f"handle_play_notification: {e}")
+
+
+@https_fn.on_request()
+def verify_admob_ssv(req: https_fn.Request) -> https_fn.Response:
+    """
+    Firebase Function to handle AdMob Server-Side Verification.
+    """
+    # AdMob sends GET requests. We need the full URL with query parameters.
+    # req.url contains the path and query string.
+    full_url = req.url
+
+    try:
+        # Perform the verification
+        is_valid = ssv_verifier.verify(full_url)
+        print(f"Verification result: {is_valid}")
+
+        if is_valid:
+            # 1. Extract data for your database
+            transaction_id = req.args.get("transaction_id")
+            user_id = req.args.get("user_id")
+            reward_item = req.args.get("reward_item")
+            reward_amount = int(req.args.get("reward_amount") or 0) / 2
+
+            print(user_id, reward_amount)
+            award_coins(user_id, reward_amount)
+
+            print(f"Verified reward for user {user_id}: {reward_amount} {reward_item}")
+
+            return https_fn.Response("Verified", status=200)
+
+    except ValueError as ve:
+        print(f"Validation error: {str(ve)}")
+        # We still return 200 or 400 depending on if we want AdMob to retry.
+        # Usually, if it's a "ValueError", the request is malformed and won't succeed later.
+        return https_fn.Response("Invalid Parameters", status=400)
+
+    except SecurityError as e:
+        print(f"Security Error: {str(e)}")
+        # Return 200 to AdMob to stop retries if the signature is simply wrong.
+        return https_fn.Response("Signature Mismatch", status=401)
+
+    return https_fn.Response("OK", status=200)

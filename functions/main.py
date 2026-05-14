@@ -9,7 +9,8 @@ from typing import Any, cast
 import google
 from firebase_admin import initialize_app, storage, firestore, auth, remote_config
 from firebase_admin.auth import UserNotFoundError
-from firebase_functions import https_fn, storage_fn, pubsub_fn
+from firebase_functions import https_fn, storage_fn, pubsub_fn, identity_fn
+from firebase_functions.core import init
 from firebase_functions.options import set_global_options, MemoryOption
 from genkit import Part, TextPart, MediaPart, Media, Document
 from genkit.core.typing import DocumentPart
@@ -56,8 +57,38 @@ from utils import (
 # parameter in the decorator, e.g. @https_fn.on_request(max_instances=5).
 set_global_options(max_instances=10)
 initialize_app()
-ssv_verifier = AdMobSSVVerifier()
+db: cloud_firestore.Client = None  # type: ignore
+ssv_verifier: AdMobSSVVerifier = None  # type: ignore
 logger = logging.getLogger(__name__)
+
+
+@init
+def initialize():
+    global db, ssv_verifier
+    db = firestore.client()
+    ssv_verifier = AdMobSSVVerifier()
+
+
+@identity_fn.before_user_created(memory=MemoryOption.MB_512)  # type: ignore
+def set_user_details(
+    event: identity_fn.AuthBlockingEvent,
+) -> identity_fn.BeforeSignInResponse | None:
+    if event.additional_user_info.is_new_user:
+        name = event.data.display_name.split(" ")  # type: ignore
+        if len(name) > 1:
+            first_name, last_name = name
+        else:
+            first_name = name[0]
+            last_name = ""
+        db.document(f"users/{event.data.uid}").set(
+            {
+                "coins": 0,
+                "email": event.data.email,
+                "first_name": first_name,
+                "last_name": last_name,
+            },
+            merge=True,
+        )
 
 
 @https_fn.on_call(timeout_sec=600, memory=MemoryOption.MB_512, cpu=2)  # type: ignore
@@ -75,7 +106,6 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
             message="Request data must be an object",
         )
 
-    db = firestore.client()
     user_data = db.document(f"users/{uid}").get()
     if user_data.get("coins") < 1:
         raise https_fn.HttpsError(
@@ -288,7 +318,6 @@ def generate_embedding(
         return
 
     collection_path = f"users/{uid}/{media_kind}"
-    db = firestore.client()
     # Best-effort dedupe for retried finalize events.
     query = db.collection(collection_path).where("gs_url", "==", gs_url)
     if source_generation:
@@ -415,7 +444,7 @@ def handle_play_notification(
         logger.warning(f"handle_play_notification: {e}")
 
 
-@https_fn.on_request()
+@https_fn.on_request(memory=MemoryOption.MB_512)  # type: ignore
 def verify_admob_ssv(req: https_fn.Request) -> https_fn.Response:
     """
     Firebase Function to handle AdMob Server-Side Verification.
@@ -431,7 +460,6 @@ def verify_admob_ssv(req: https_fn.Request) -> https_fn.Response:
 
         if is_valid:
             # 1. Extract data for your database
-            transaction_id = req.args.get("transaction_id")
             user_id = req.args.get("user_id")
             reward_item = req.args.get("reward_item")
             reward_amount = int(req.args.get("reward_amount") or 0) / 2

@@ -82,7 +82,7 @@ def set_user_details(
             last_name = ""
         db.document(f"users/{event.data.uid}").set(
             {
-                "coins": 0,
+                "coins": 12,
                 "email": event.data.email,
                 "first_name": first_name,
                 "last_name": last_name,

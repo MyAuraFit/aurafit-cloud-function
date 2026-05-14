@@ -80,9 +80,11 @@ def set_user_details(
         else:
             first_name = name[0]
             last_name = ""
+        template = asyncio.run(remote_config.get_server_template())
+        config = template.evaluate()
         db.document(f"users/{event.data.uid}").set(
             {
-                "coins": 12,
+                "coins": config.get_int("user_initial_coins"),
                 "email": event.data.email,
                 "first_name": first_name,
                 "last_name": last_name,

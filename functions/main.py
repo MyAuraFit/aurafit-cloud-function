@@ -116,7 +116,7 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
     if user_data.get("coins") < 1:
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.FAILED_PRECONDITION,
-            message="Insufficient coins to generate image, please top up your account",
+            message="Insufficient coins to generate image, [b][u][ref=coin]please top up your account[/ref][/u][/b]",
         )
 
     data: dict[str, Any] = req.data

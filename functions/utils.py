@@ -3,7 +3,7 @@ from datetime import timezone, datetime
 from io import BytesIO
 
 from PIL import Image, ImageFilter
-from firebase_admin import auth, firestore
+from firebase_admin import auth
 from firebase_functions import https_fn
 from google.cloud.firestore_v1 import Increment
 
@@ -173,6 +173,7 @@ def process_one_time_product(service, data, config):
 
 
 def award_coins(uid, amount):
-    db = firestore.client()
+    from init import db
+
     db.document(f"users/{uid}").update({"coins": Increment(amount)})
     print(f"award_coins: Awarded {amount} coins to {uid}")

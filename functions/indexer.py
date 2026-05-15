@@ -1,4 +1,3 @@
-from firebase_admin import firestore_async
 from genkit import ActionRunContext
 from genkit.blocks.retriever import IndexerRequest
 from google.cloud.firestore_v1.vector import Vector
@@ -25,8 +24,9 @@ async def index_documents(input_req: IndexerRequest, ctx: ActionRunContext):
         index_data.document_data[index_data.vector_field] = Vector(
             embedding[0].embedding
         )
-        db = firestore_async.client()
-        await db.collection(index_data.collection).add(index_data.document_data)
+        from init import db
+
+        db.collection(index_data.collection).add(index_data.document_data)
 
 
 indexer_ai.define_indexer(name="index_documents", fn=index_documents)  # type: ignore

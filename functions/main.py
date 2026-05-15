@@ -7,7 +7,12 @@ import pathlib
 from typing import Any, cast
 
 import google
-from firebase_admin import initialize_app, storage, firestore, auth, remote_config
+from firebase_admin import (
+    initialize_app,
+    storage,
+    auth,
+    remote_config,
+)
 from firebase_admin.auth import UserNotFoundError
 from firebase_functions import https_fn, storage_fn, pubsub_fn, identity_fn
 from firebase_functions.core import init
@@ -22,8 +27,8 @@ from models import (
     GenerateImageInputSchema,
     ImageGenerationResult,
     ImageCategorizationInput,
-    ImageCategorizationOutput,
     IndexData,
+    ImageCategorizationOutput,
 )
 from prompts import (
     generate_image_system_prompt,
@@ -65,8 +70,8 @@ logger = logging.getLogger(__name__)
 @init
 def initialize():
     global db, ssv_verifier
-    db = firestore.client()
-    ssv_verifier = AdMobSSVVerifier()
+    if not (db or ssv_verifier):
+        from init import db, ssv_verifier
 
 
 @identity_fn.before_user_created(memory=MemoryOption.MB_512)  # type: ignore
@@ -107,7 +112,6 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
             code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
             message="Request data must be an object",
         )
-
     user_data = db.document(f"users/{uid}").get()
     if user_data.get("coins") < 1:
         raise https_fn.HttpsError(
@@ -281,7 +285,7 @@ def generate_image(req: https_fn.CallableRequest) -> dict:
     }
 
 
-@storage_fn.on_object_finalized(timeout_sec=540, memory=MemoryOption.MB_512)  # type: ignore
+@storage_fn.on_object_finalized(timeout_sec=540, memory=MemoryOption.GB_1)  # type: ignore
 def generate_embedding(
     event: storage_fn.CloudEvent[storage_fn.StorageObjectData],
 ):

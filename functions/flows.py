@@ -56,7 +56,7 @@ async def generate_autofit_flow(
     async def generate_query(user_prompt) -> str:
         result = await flow_ai.generate(
             system=user_cloth_vector_search_system_prompt,
-            model="vertexai/gemini-3-flash-preview",
+            model="vertexai/gemini-3.5-flash-lite",
             prompt=user_prompt,
             output=Output(schema=QueryOutput),
             config={

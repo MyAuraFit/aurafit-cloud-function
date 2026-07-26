@@ -25,7 +25,7 @@ class GenerateImageInputSchema(BaseModel):
         default=None, description="The prompt to generate an image for."
     )
     model: str = Field(
-        default="vertexai/gemini-2.5-flash-image",
+        default="vertexai/gemini-3.1-flash-lite-image",
         description="The model to use for image generation.",
     )
     image_config: ImageConfig = Field(
@@ -86,7 +86,7 @@ class ImageCategorizationInput(BaseModel):
         description="The prompt image to categorize."
     )
     model: str = Field(
-        default="vertexai/gemini-3.1-flash-lite-preview",
+        default="vertexai/gemini-3.5-flash-lite",
         description="The model to use for image categorization.",
     )
 
@@ -104,7 +104,7 @@ class ImageGenerationResult(BaseModel):
 
 class IndexData(BaseModel):
     embedder: str | None = Field(
-        default="vertexai/gemini-embedding-2-preview",
+        default="vertexai/gemini-embedding-2",
         description="The embedder model to use for generating the embedding.",
     )
     vector_field: str = Field(

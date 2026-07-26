@@ -98,14 +98,16 @@ if __name__ == "__main__":
     #     )
     # )
 
-    print(
-        run_generate_autofit_flow(
-            GenerateImageInputSchema(
-                uid="NlGVVbZ1ssMaOROGB9giY0Yu4KB3",
-                system=generate_image_system_prompt,
-                prompt="I'm going for an outdoor event and it's kind of cold",
-                image_config=ImageConfig(),
-                firestore_client=firestore.client(),
-            )
+
+    result = run_generate_autofit_flow(
+        GenerateImageInputSchema(
+            uid="NlGVVbZ1ssMaOROGB9giY0Yu4KB3",
+            system=generate_image_system_prompt,
+            prompt="I'm going for an outdoor event and it's kind of cold",
+            image_config=ImageConfig(),
+            firestore_client=firestore.client(),
         )
     )
+
+    with open("test.png", "wb") as f:
+        f.write(result.image_data)

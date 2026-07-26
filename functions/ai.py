@@ -5,5 +5,5 @@ flow_ai = Genkit(
     plugins=[VertexAI(project="my-aurafit", location="global")],
 )
 indexer_ai = Genkit(
-    plugins=[VertexAI(project="my-aurafit", location="us-central1")],
+    plugins=[VertexAI(project="my-aurafit", location="global")],
 )
